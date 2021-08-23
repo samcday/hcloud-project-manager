@@ -9,7 +9,7 @@ FROM rust:1.54 as build
 WORKDIR /usr/src/app
 COPY --from=cargo /usr/local/cargo /usr/local/cargo
 COPY . .
-RUN cargo install
+RUN cargo install --path .
 
 FROM chromedp/headless-shell:latest
 RUN apt-get update && apt-get install -y dumb-init openssl && rm -rf /var/lib/apt/lists/*
