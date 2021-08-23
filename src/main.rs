@@ -25,7 +25,7 @@ async fn main() -> Result<()> {
     let username = std::env::var("HCLOUD_USERNAME")?;
     let password = std::env::var("HCLOUD_PASSWORD")?;
 
-    let raw_token = get_token(&username, &password).map_err(|e| e.compat())?;
+    let raw_token = get_user_token(&username, &password).map_err(|e| e.compat())?;
 
     let token_str = form_urlencoded::parse(("v=".to_owned()+&raw_token).as_bytes())
         .next().ok_or_else(|| eyre!("couldn't parse url-encoded token"))?.1.into_owned();
