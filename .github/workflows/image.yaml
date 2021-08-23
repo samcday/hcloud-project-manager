@@ -27,5 +27,6 @@ jobs:
       - uses: docker/build-push-action@v2
         with:
           context: .
+          cache-from: type=gha
           cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/hcloud-project-manager:cargo-${{ hashFiles('Cargo.lock') }},mode=max
           target: deps
