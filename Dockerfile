@@ -1,13 +1,9 @@
 FROM rust:1.54 as cargo
 WORKDIR /usr/src/app
 COPY Cargo.toml Cargo.lock ./
-RUN mkdir src
-RUN echo "fn main() {}" > src/main.rs
-RUN cargo build
+RUN mkdir .cargo
+RUN cargo vendor > .cargo/config
 
-FROM rust:1.54 as build
-WORKDIR /usr/src/app
-COPY --from=cargo /usr/local/cargo /usr/local/cargo
 COPY . .
 RUN cargo install --path .
 
