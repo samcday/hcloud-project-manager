@@ -4,9 +4,8 @@ const CONSOLE_URL: &str = "https://console.hetzner.cloud";
 
 use serde::{Serialize, Deserialize};
 use eyre::{eyre, Result};
-use headless_chrome::{Browser};
 use std::collections::HashMap;
-use clap::{crate_version, App};
+use headless_chrome::{Browser, LaunchOptionsBuilder};
 
 #[derive(Serialize, Deserialize, Debug)]
 struct CloudConsoleToken {
@@ -26,13 +25,15 @@ async fn main() -> Result<()> {
     let username = std::env::var("HCLOUD_USERNAME")?;
     let password = std::env::var("HCLOUD_PASSWORD")?;
 
-    let rawToken = get_token(&username, &password).map_err(|e| e.compat())?;
+    let raw_token = get_token(&username, &password).map_err(|e| e.compat())?;
 
-    let tokenStr = form_urlencoded::parse(("v=".to_owned()+&rawToken).as_bytes())
+    let token_str = form_urlencoded::parse(("v=".to_owned()+&raw_token).as_bytes())
         .next().ok_or_else(|| eyre!("couldn't parse url-encoded token"))?.1.into_owned();
 
-    let token = serde_json::from_str::<HashMap<String, CloudConsoleToken>>(&tokenStr)?
+    let token = serde_json::from_str::<HashMap<String, CloudConsoleToken>>(&token_str)?
         .values().next().ok_or_else(|| eyre!("couldn't locate token in cookie"))?.token.to_owned();
+
+    println!("{}", token);
 
     let client = reqwest::Client::new();
     let response = client.get("https://api.hetzner.cloud/v1/_projects")
@@ -45,7 +46,10 @@ async fn main() -> Result<()> {
 }
 
 fn get_token(username: &str, password: &str) -> Result<String, failure::Error> {
-    let browser = Browser::default()?;
+    let browser = Browser::new(LaunchOptionsBuilder::default()
+        .path(Some("/headless-shell/headless-shell".into()))
+        .sandbox(false)
+        .build().or_else(|_| Err(failure::format_err!("onoes")))?)?;
     let tab = browser.wait_for_initial_tab()?;
     tab.navigate_to(CONSOLE_URL)?;
     tab.wait_until_navigated()?;
@@ -58,7 +62,6 @@ fn get_token(username: &str, password: &str) -> Result<String, failure::Error> {
     tab.wait_for_element("#submit-login")?.click()?;
 
     tab.wait_for_element(".user-details__robotcn")?;
-    println!("{}", tab.get_url());
 
     Ok(tab.get_cookies()?.iter()
         .find(|cookie| cookie.name == "tokens" && cookie.domain == "console.hetzner.cloud")
