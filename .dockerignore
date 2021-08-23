@@ -1,2 +1,4 @@
-*
-!target/release/hcloud-ephemeral-project-action
+.git/
+.github/
+target/
+action.yaml
