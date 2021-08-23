@@ -1,4 +1,4 @@
-FROM rust:1.40 as builder
+FROM rust:1.54 as builder
 WORKDIR /usr/src/myapp
 COPY . .
 RUN cargo install --path .
