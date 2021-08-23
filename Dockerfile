@@ -1,5 +1,8 @@
 FROM rust:1.54 as cargo
+WORKDIR /usr/src/app
 COPY Cargo.toml Cargo.lock ./
+RUN mkdir src
+RUN echo "fn main() {}" > src/main.rs
 RUN cargo fetch
 
 FROM rust:1.54 as build
