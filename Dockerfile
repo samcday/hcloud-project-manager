@@ -1,7 +1,7 @@
 FROM rust:1.54 as builder
 WORKDIR /usr/src/app
 COPY Cargo.toml Cargo.lock ./
-RUN mkdir src && echo "fn main() {}" > src/main.rs && cargo build --release && rm src/main.rs && rmdir src && cargo clean --release -p hcloud-project-manager
+RUN mkdir src && echo "fn main() {}" > src/main.rs && cargo build --release && cargo clean --release -p hcloud-project-manager && rm src/main.rs && rmdir src
 
 COPY . .
 RUN cargo build --release
