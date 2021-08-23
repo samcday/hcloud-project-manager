@@ -3,7 +3,7 @@ WORKDIR /usr/src/app
 COPY Cargo.toml Cargo.lock ./
 RUN mkdir src
 RUN echo "fn main() {}" > src/main.rs
-RUN cargo fetch
+RUN cargo build
 
 FROM rust:1.54 as build
 WORKDIR /usr/src/app
