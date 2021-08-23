@@ -29,4 +29,4 @@ jobs:
           context: .
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/hcloud-project-manager:cargo-${{ hashFiles('Cargo.lock') }}
-          target: builder
+          target: deps

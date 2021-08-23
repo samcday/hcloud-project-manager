@@ -45,16 +45,18 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-fn get_token(username: &str, password: &str) -> Result<String, failure::Error> {
+// Uses a headless browser and provided login credentials to obtain a Hetzner API user token.
+// This token is permitted to create/delete projects, and obtain API project_user tokens.
+fn get_user_token(username: &str, password: &str) -> Result<String, failure::Error> {
     let browser = Browser::new(LaunchOptionsBuilder::default()
         .path(Some("/headless-shell/headless-shell".into()))
         .sandbox(false)
-        .build().or_else(|_| Err(failure::format_err!("onoes")))?)?;
+        .build().or_else(|err| Err(failure::format_err!("failed to launch headless_chrome: {}", err)))?)?;
     let tab = browser.wait_for_initial_tab()?;
     tab.navigate_to(CONSOLE_URL)?;
     tab.wait_until_navigated()?;
     if !tab.get_url().starts_with("https://accounts.hetzner.com/login") {
-        return Err(failure::format_err!("onoes"));
+        return Err(failure::format_err!("expected navigation to login page, got {} instead", tab.get_url()));
     }
 
     tab.wait_for_element("#_username")?.type_into(username)?;
