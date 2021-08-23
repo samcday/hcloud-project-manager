@@ -2,7 +2,7 @@ FROM rust:1.54 as builder
 WORKDIR /usr/src/app
 COPY Cargo.toml Cargo.lock ./
 RUN mkdir .cargo
-RUN cargo vendor > .cargo/config
+RUN mkdir src && echo "fn main() {}" > src/main.rs && cargo vendor > .cargo/config && rm src/main.rs && rmdir src
 
 COPY . .
 RUN cargo install --path .
