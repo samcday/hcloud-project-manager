@@ -1,15 +1,10 @@
 on: push
 name: test self
 jobs:
-  clippy_check:
+  selftest:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v1
       - uses: ./
         with:
           name: actions-test-${{ github.run_id }}
-      - run: rustup component add clippy
-      - uses: actions-rs/clippy-check@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          args: --all-features
