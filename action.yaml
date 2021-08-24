@@ -20,4 +20,4 @@ runs:
     - ${{ inputs.action }}
   entrypoint: /actions-entrypoint.sh
   post-entrypoint: /actions-cleanup.sh
-  post-if: inputs.action == 'create' && inputs.ephemeral == 'true'
+  post-if: inputs.action == 'create' # && inputs.ephemeral == 'true'
