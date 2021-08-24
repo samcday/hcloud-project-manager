@@ -5,10 +5,39 @@ use eyre::{eyre, Result, WrapErr};
 use headless_chrome::{Browser, LaunchOptionsBuilder};
 use tracing_subscriber::EnvFilter;
 
+use reqwest::header;
+use reqwest::header::HeaderMap;
+use serde::Deserialize;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 
+const PER_PAGE: &str = "25";
 const CONSOLE_URL: &str = "https://console.hetzner.cloud";
+
+#[derive(Debug, Deserialize)]
+struct Project {
+    id: u32,
+    name: String,
+    usage_alert_threshold: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct Pagination {
+    page: u32,
+    per_page: u32,
+    next_page: Option<u32>,
+}
+
+#[derive(Debug, Deserialize)]
+struct Meta {
+    pagination: Pagination,
+}
+
+#[derive(Deserialize, Debug)]
+struct ProjectListResponse {
+    projects: Vec<Project>,
+    meta: Meta,
+}
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -19,8 +48,8 @@ async fn main() -> Result<()> {
 
     let matches = app_from_crate!()
         .subcommand(
-            SubCommand::with_name("user-token")
-                .about("Generates a user API token from credentials")
+            SubCommand::with_name("login")
+                .about("Generate a user API token from credentials")
                 .arg(
                     Arg::from_usage("-u, --username=<USER> 'Hetzner account username'")
                         .env("HETZNER_USERNAME")
@@ -42,7 +71,7 @@ async fn main() -> Result<()> {
         )
         .subcommand(
             SubCommand::with_name("create")
-                .about("Create a new Hetzner Cloud project")
+                .about("Create a new project")
                 .arg(
                     Arg::from_usage("-t, --token=<TOKEN> 'Hetzner API user token'")
                         .env("HCLOUD_USER_TOKEN")
@@ -52,7 +81,7 @@ async fn main() -> Result<()> {
         )
         .subcommand(
             SubCommand::with_name("delete")
-                .about("Delete a Hetzner Cloud project")
+                .about("Delete a project")
                 .arg(
                     Arg::from_usage("-t, --token=<TOKEN> 'Hetzner API user token'")
                         .env("HCLOUD_USER_TOKEN")
@@ -60,9 +89,19 @@ async fn main() -> Result<()> {
                 )
                 .arg_from_usage("<name> 'Name of project to delete'"),
         )
+        .subcommand(
+            SubCommand::with_name("id")
+                .arg(
+                    Arg::from_usage("-t, --token=<TOKEN> 'Hetzner API user token'")
+                        .env("HCLOUD_USER_TOKEN")
+                        .required(true),
+                )
+                .about("Get project ID by name")
+                .arg(Arg::from_usage("<name> 'Name of project'")),
+        )
         .get_matches();
 
-    if let Some(matches) = matches.subcommand_matches("user-token") {
+    if let Some(matches) = matches.subcommand_matches("login") {
         let username = matches.value_of("username").unwrap();
         let password = matches.value_of("password").unwrap();
 
@@ -87,7 +126,7 @@ async fn main() -> Result<()> {
         let client = reqwest::Client::new();
         let response = client
             .post("https://api.hetzner.cloud/v1/_projects")
-            .header(reqwest::header::CONTENT_TYPE, "application/json")
+            .header(header::CONTENT_TYPE, "application/json")
             .body(json!({ "name": project_name }).to_string())
             .bearer_auth(user_token)
             .send()
@@ -96,22 +135,53 @@ async fn main() -> Result<()> {
         println!("{}", response.text().await?);
     }
 
-    // if let Some(matches) = matches.subcommand_matches("delete") {
-    // let user_token = matches.value_of("token").unwrap();
-    // let project_name = matches.value_of("name").unwrap();
+    if let Some(matches) = matches.subcommand_matches("id") {
+        println!(
+            "{}",
+            get_project_id(
+                matches.value_of("token").unwrap(),
+                matches.value_of("name").unwrap()
+            )
+            .await?
+        );
+    }
 
-    // Find project ID by name.
+    if let Some(matches) = matches.subcommand_matches("delete") {
+        let user_token = matches.value_of("token").unwrap();
+        let id = get_project_id(user_token, matches.value_of("name").unwrap()).await?;
 
-    // let client = reqwest::Client::new();
-    // let response = client
-    //     .delete("https://api.hetzner.cloud/v1/_projects")
-    //     .header(reqwest::header::CONTENT_TYPE, "application/json")
-    //     .bearer_auth(user_token)
-    //     .send()
-    //     .await?;
-    // }
+        reqwest::Client::new()
+            .delete(format!("https://api.hetzner.cloud/v1/_projects/{}", id).as_str())
+            .bearer_auth(user_token)
+            .send()
+            .await?;
+    }
 
     Ok(())
+}
+
+async fn get_project_id(token: &str, project_name: &str) -> Result<u32> {
+    let mut next_page = Some(1);
+    while let Some(page) = next_page {
+        let resp: ProjectListResponse = reqwest::Client::new()
+            .get("https://api.hetzner.cloud/v1/_projects")
+            .bearer_auth(token)
+            .query(&[("per_page", PER_PAGE), ("page", &page.to_string())])
+            .send()
+            .await?
+            .json()
+            .await?;
+
+        for proj in resp.projects {
+            if proj.name == project_name {
+                return Ok(proj.id);
+            }
+        }
+
+        next_page = resp.meta.pagination.next_page;
+    }
+
+    Err(eyre!("project {} not found", project_name))
 }
 
 // Uses a headless browser and provided login credentials to obtain a Hetzner API user token.
