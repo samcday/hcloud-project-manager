@@ -1,3 +1,7 @@
 #!/usr/bin/env bash
 
-echo deleting $1
+set -ueo pipefail
+
+if [[ "${EPHEMERAL:-}" == "true" ]]; then
+  echo deleting $1
+fi

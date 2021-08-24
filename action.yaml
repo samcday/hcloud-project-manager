@@ -18,6 +18,7 @@ runs:
   args:
     - ${{ inputs.name }}
     - ${{ inputs.action }}
+  env:
+    EPHEMERAL: ${{ inputs.ephemeral }}
   entrypoint: /actions-entrypoint.sh
   post-entrypoint: /actions-cleanup.sh
-  post-if: contains(inputs.action, 'create') # && inputs.ephemeral == 'true'
