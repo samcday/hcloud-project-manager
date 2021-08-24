@@ -1,0 +1,23 @@
+name: Hetzner Cloud Projects
+description: Unofficial tool to manage projects and API tokens in Hetzner Cloud
+inputs:
+  action:
+    description: One of create|delete
+    default: create
+    required: true
+  name:
+    description: Name of project to create or delete.
+    required: true
+  ephemeral:
+    description: (Default 'true') If action is 'create', delete the Hetzner Cloud project (and all resources in it) at the end of the run.
+    default: 'true'
+    required: true
+runs:
+  using: docker
+  image: ghcr.io/samcday/hcloud-project-manager@sha256:1057eba779ebb20fa12d1a30eda6cdffe7aaa195b7121c5eff6a38f206f79f65
+  args:
+    - ${{ inputs.name }}
+    - ${{ inputs.action }}
+  entrypoint: actions-entrypoint.sh
+  post-entrypoint: actions-cleanup.sh
+  post-if: inputs.action == 'create' && actions.ephemeral == 'true'
