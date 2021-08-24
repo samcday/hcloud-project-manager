@@ -14,7 +14,7 @@ inputs:
     required: true
 runs:
   using: docker
-  image: ghcr.io/samcday/hcloud-project-manager@sha256:1057eba779ebb20fa12d1a30eda6cdffe7aaa195b7121c5eff6a38f206f79f65
+  image: ghcr.io/samcday/hcloud-project-manager@sha256:33515a20ec5dfac3616456ecf3cdfad0d7bd8b51ea822f1f79623d92d697111a
   args:
     - ${{ inputs.name }}
     - ${{ inputs.action }}
