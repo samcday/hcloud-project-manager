@@ -5,7 +5,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v1
-      - uses: .
+      - uses: /
         with:
           name: actions-test-${{ github.run_id }}
       - run: rustup component add clippy
