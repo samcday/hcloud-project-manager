@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -uexo pipefail
+set -ueo pipefail
 
 HCLOUD_USER_TOKEN=$(hcloud-project-manager login)
 echo "::add-mask::$HCLOUD_USER_TOKEN"
