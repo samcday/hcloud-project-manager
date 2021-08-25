@@ -8,3 +8,4 @@ jobs:
       - uses: ./
         with:
           name: actions-test-${{ github.run_id }}
+      - run: sleep 60

@@ -3,5 +3,6 @@
 set -ueo pipefail
 
 if [[ "${EPHEMERAL:-}" == "true" ]]; then
-  echo deleting $1
+  export HCLOUD_USER_TOKEN=$(hcloud-project-manager login)
+  hcloud-project-manager delete $1
 fi

@@ -91,12 +91,22 @@ async fn main() -> Result<()> {
         )
         .subcommand(
             SubCommand::with_name("id")
+                .about("Get project ID by name")
                 .arg(
                     Arg::from_usage("-t, --token=<TOKEN> 'Hetzner API user token'")
                         .env("HCLOUD_USER_TOKEN")
                         .required(true),
                 )
-                .about("Get project ID by name")
+                .arg(Arg::from_usage("<name> 'Name of project'")),
+        )
+        .subcommand(
+            SubCommand::with_name("token")
+                .about("Generate API token for a project")
+                .arg(
+                    Arg::from_usage("-t, --token=<TOKEN> 'Hetzner API user token'")
+                        .env("HCLOUD_USER_TOKEN")
+                        .required(true),
+                )
                 .arg(Arg::from_usage("<name> 'Name of project'")),
         )
         .get_matches();
@@ -132,7 +142,10 @@ async fn main() -> Result<()> {
             .send()
             .await?;
 
-        println!("{}", response.text().await?);
+        let project_id = response.json::<Value>().await?["project"]["id"]
+            .as_i64()
+            .unwrap();
+        println!("{}", project_id);
     }
 
     if let Some(matches) = matches.subcommand_matches("id") {
@@ -143,6 +156,26 @@ async fn main() -> Result<()> {
                 matches.value_of("name").unwrap()
             )
             .await?
+        );
+    }
+
+    if let Some(matches) = matches.subcommand_matches("token") {
+        let user_token = matches.value_of("token").unwrap();
+        let project_id = get_project_id(user_token, matches.value_of("name").unwrap()).await?;
+
+        let client = reqwest::Client::new();
+        let response = client
+            .post("https://api.hetzner.cloud/v1/_tokens")
+            .json(&json!({ "type": "project_user", "project": project_id.to_string() }))
+            .bearer_auth(user_token)
+            .send()
+            .await?;
+
+        println!(
+            "{}",
+            response.json::<Value>().await?["secret_token"]
+                .as_str()
+                .unwrap()
         );
     }
 

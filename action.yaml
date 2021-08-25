@@ -12,6 +12,23 @@ inputs:
     description: (Default 'true') If action is 'create', delete the Hetzner Cloud project (and all resources in it) at the end of the run.
     default: 'true'
     required: true
+  username:
+    description: Hetzner account username
+    required: true
+  password:
+    description: Hetzner account password
+    required: true
+  set_token:
+    description: (Default 'true') If 'true', set the HCLOUD_TOKEN environment variable for use by subsequent actions.
+    default: 'true'
+    required: false
+
+outputs:
+  project_id:
+    description: The ID of the created project, only set if action input is 'create'.
+  token:
+    description: Generated API token for project, only set if action input is 'create'.
+
 runs:
   using: docker
   image: ghcr.io/samcday/hcloud-project-manager@sha256:33515a20ec5dfac3616456ecf3cdfad0d7bd8b51ea822f1f79623d92d697111a
@@ -20,5 +37,8 @@ runs:
     - ${{ inputs.action }}
   env:
     EPHEMERAL: ${{ inputs.ephemeral }}
+    SET_TOKEN: ${{ inputs.set_token }}
+    HETZNER_USERNAME: ${{ inputs.username }}
+    HETZNER_PASSWORD: ${{ inputs.password }}
   entrypoint: /actions-entrypoint.sh
   post-entrypoint: /actions-cleanup.sh
