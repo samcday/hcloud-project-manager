@@ -12,4 +12,6 @@ RUN apt-get update && apt-get install -y dumb-init openssl ca-certificates && rm
 COPY --from=builder /usr/src/app/target/release/hcloud-project-manager /bin/hcloud-project-manager
 COPY actions-*.sh /
 ENTRYPOINT ["dumb-init", "--"]
+ENV HEADLESS_PATH=/headless-shell/headless-shell
+ENV HEADLESS_NO_SANDBOX=1
 CMD ["/bin/hcloud-project-manager"]
