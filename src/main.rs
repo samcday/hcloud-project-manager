@@ -5,13 +5,15 @@ use eyre::{eyre, Result, WrapErr};
 use headless_chrome::{Browser, LaunchOptionsBuilder};
 use tracing_subscriber::EnvFilter;
 
+use headless_chrome::util::Wait;
 use reqwest::header;
-use reqwest::header::HeaderMap;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::collections::HashMap;
+use std::thread::sleep;
 
 const PER_PAGE: &str = "25";
+const LOGIN_URL: &str = "https://accounts.hetzner.com/login";
 const CONSOLE_URL: &str = "https://console.hetzner.cloud";
 
 #[derive(Debug, Deserialize)]
@@ -225,22 +227,26 @@ fn get_user_token(
     browser: Browser,
 ) -> Result<String, failure::Error> {
     let tab = browser.wait_for_initial_tab()?;
-    tab.navigate_to(CONSOLE_URL)?;
-    tab.wait_until_navigated()?;
-    if !tab
-        .get_url()
-        .starts_with("https://accounts.hetzner.com/login")
-    {
-        return Err(failure::format_err!(
-            "expected navigation to login page, got {} instead",
-            tab.get_url()
-        ));
-    }
+    tab.navigate_to(LOGIN_URL)?;
 
     tab.wait_for_element("#_username")?.type_into(username)?;
     tab.wait_for_element("#_password")?.type_into(password)?;
     tab.wait_for_element("#submit-login")?.click()?;
 
+    Wait::with_timeout(Duration::from_secs(5)).until(|| {
+        if tab.get_url().starts_with(LOGIN_URL) {
+            None
+        } else {
+            Some(())
+        }
+    })?;
+
+    tab.wait_until_navigated()?;
+    if tab.get_url().starts_with(LOGIN_URL) {
+        return Err(failure::format_err!("login failed"));
+    }
+
+    tab.navigate_to(CONSOLE_URL)?;
     tab.wait_for_element(".user-details__robotcn")?;
 
     // Scoop the token storage out of the "tokens" cookie saved by console.hetzner.cloud.
