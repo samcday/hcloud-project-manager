@@ -5,6 +5,7 @@ use eyre::{eyre, Result, WrapErr};
 use headless_chrome::{Browser, LaunchOptionsBuilder};
 use tracing_subscriber::EnvFilter;
 
+use failure::ResultExt;
 use headless_chrome::util::Wait;
 use reqwest::header;
 use serde::Deserialize;
@@ -226,28 +227,35 @@ fn get_user_token(
     password: &str,
     browser: Browser,
 ) -> Result<String, failure::Error> {
-    let tab = browser.wait_for_initial_tab()?;
-    tab.navigate_to(LOGIN_URL)?;
+    let tab = browser
+        .wait_for_initial_tab()
+        .context("Couldn't open tab")?;
+    tab.navigate_to(LOGIN_URL)
+        .context("Couldn't navigate to login page")?;
 
-    tab.wait_for_element("#_username")?.type_into(username)?;
-    tab.wait_for_element("#_password")?.type_into(password)?;
-    tab.wait_for_element("#submit-login")?.click()?;
+    tab.wait_for_element("#_username")
+        .context("Missing username field")?
+        .type_into(username)?;
+    tab.wait_for_element("#_password")
+        .context("Missing password field")?
+        .type_into(password)?;
+    tab.wait_for_element("#submit-login")
+        .context("Missing submit button")?
+        .click()?;
 
-    Wait::with_timeout(Duration::from_secs(5)).until(|| {
-        if tab.get_url().starts_with(LOGIN_URL) {
-            None
-        } else {
-            Some(())
-        }
-    })?;
+    Wait::with_timeout(Duration::from_secs(5))
+        .until(|| {
+            if tab.get_url().starts_with(LOGIN_URL) {
+                None
+            } else {
+                Some(())
+            }
+        })
+        .context("Login failed")?;
 
-    tab.wait_until_navigated()?;
-    if tab.get_url().starts_with(LOGIN_URL) {
-        return Err(failure::format_err!("login failed"));
-    }
-
-    tab.navigate_to(CONSOLE_URL)?;
-    tab.wait_for_element(".user-details__robotcn")?;
+    tab.navigate_to(CONSOLE_URL)
+        .and_then(|_| tab.wait_until_navigated())
+        .context("Couldn't visit Cloud console")?;
 
     // Scoop the token storage out of the "tokens" cookie saved by console.hetzner.cloud.
     let raw_token = tab
