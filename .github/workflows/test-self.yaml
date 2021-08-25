@@ -12,4 +12,6 @@ jobs:
       - uses: ./
         with:
           name: actions-test-${{ github.run_id }}
+          username: ${{ secrets.HETZNER_USERNAME }}
+          password: ${{ secrets.HETZNER_PASSWORD }}
       - run: sleep 60
