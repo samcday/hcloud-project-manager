@@ -15,6 +15,6 @@ jobs:
           username: ${{ secrets.HETZNER_USERNAME }}
           password: ${{ secrets.HETZNER_PASSWORD }}
       - uses: 3bit/setup-hcloud@v1
-      - run:
+      - run: |
           hcloud network create --ip-range 10.0.0.0/16 --name foo
           hcloud network list
