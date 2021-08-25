@@ -10,7 +10,7 @@ use reqwest::header;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::collections::HashMap;
-use std::thread::sleep;
+use std::time::Duration;
 
 const PER_PAGE: &str = "25";
 const LOGIN_URL: &str = "https://accounts.hetzner.com/login";
