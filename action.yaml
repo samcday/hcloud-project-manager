@@ -31,7 +31,7 @@ outputs:
 
 runs:
   using: docker
-  image: ghcr.io/samcday/hcloud-project-manager@sha256:33515a20ec5dfac3616456ecf3cdfad0d7bd8b51ea822f1f79623d92d697111a
+  image: ghcr.io/samcday/hcloud-project-manager@latest
   args:
     - ${{ inputs.name }}
     - ${{ inputs.action }}

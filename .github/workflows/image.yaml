@@ -21,7 +21,9 @@ jobs:
         with:
           context: .
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/hcloud-project-manager:${{ github.sha }}
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/hcloud-project-manager:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/hcloud-project-manager:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - uses: docker/build-push-action@v2

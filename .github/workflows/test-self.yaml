@@ -1,5 +1,9 @@
-on: push
 name: test self
+on:
+  workflow_run:
+    workflows: ["Build Image"]
+    branches: [main]
+    types: [completed]
 jobs:
   selftest:
     runs-on: ubuntu-latest
