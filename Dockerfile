@@ -7,7 +7,8 @@ FROM deps as builder
 COPY . .
 RUN cargo build --release
 
-FROM gcr.io/distroless/cc-debian10
+FROM debian:buster-slim
+RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /usr/src/app/target/release/hcloud-project-manager /bin/hcloud-project-manager
 COPY actions-*.sh /
 ENTRYPOINT ["/bin/hcloud-project-manager"]
