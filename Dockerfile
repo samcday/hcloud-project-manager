@@ -7,7 +7,7 @@ FROM deps as builder
 COPY . .
 RUN cargo build --release
 
-FROM gcr.io/distroless/base-debian10
+FROM gcr.io/distroless/cc-debian10
 COPY --from=builder /usr/src/app/target/release/hcloud-project-manager /bin/hcloud-project-manager
 COPY actions-*.sh /
 ENTRYPOINT ["/bin/hcloud-project-manager"]
