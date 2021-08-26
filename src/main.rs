@@ -1,20 +1,21 @@
+use std::collections::HashMap;
+
 use clap::{
     app_from_crate, crate_authors, crate_description, crate_name, crate_version, Arg, SubCommand,
 };
 use eyre::{eyre, Result, WrapErr};
-use headless_chrome::{Browser, LaunchOptionsBuilder};
-use tracing_subscriber::EnvFilter;
-
-use failure::ResultExt;
-use headless_chrome::util::Wait;
 use reqwest::header;
+use reqwest::redirect::Policy;
+use select::document::Document;
+use select::predicate::Attr;
 use serde::Deserialize;
 use serde_json::{json, Value};
-use std::collections::HashMap;
-use std::time::Duration;
+use tracing_subscriber::EnvFilter;
 
 const PER_PAGE: &str = "25";
 const LOGIN_URL: &str = "https://accounts.hetzner.com/login";
+const LOGIN_CHECK_URL: &str = "https://accounts.hetzner.com/login_check";
+const AUTHORIZE_URL: &str = "https://accounts.hetzner.com/oauth/authorize";
 const CONSOLE_URL: &str = "https://console.hetzner.cloud";
 
 #[derive(Debug, Deserialize)]
@@ -62,14 +63,6 @@ async fn main() -> Result<()> {
                     Arg::from_usage("-p, --password=<PASS> 'Hetzner account password'")
                         .env("HETZNER_PASSWORD")
                         .required(true),
-                )
-                .arg(
-                    Arg::from_usage("--headless-no-sandbox 'Disable Headless Chrome sandbox'")
-                        .env("HEADLESS_NO_SANDBOX"),
-                )
-                .arg(
-                    Arg::from_usage("--headless-path=[PATH] 'Path to Chrome binary'")
-                        .env("HEADLESS_PATH"),
                 ),
         )
         .subcommand(
@@ -118,17 +111,7 @@ async fn main() -> Result<()> {
         let username = matches.value_of("username").unwrap();
         let password = matches.value_of("password").unwrap();
 
-        let browser = Browser::new(
-            LaunchOptionsBuilder::default()
-                .path(matches.value_of("headless-path").map(|p| p.into()))
-                .sandbox(!matches.is_present("headless-no-sandbox"))
-                .build()
-                .map_err(|e| eyre!("error building headless_chrome::LaunchOptions: {}", e))?,
-        )
-        .map_err(|e| e.compat())
-        .wrap_err("error initializing Headless Chrome")?;
-
-        let user_token = get_user_token(&username, &password, browser).map_err(|e| e.compat())?;
+        let user_token = get_user_token(&username, &password).await?;
         println!("{}", user_token);
     }
 
@@ -156,7 +139,7 @@ async fn main() -> Result<()> {
             "{}",
             get_project_id(
                 matches.value_of("token").unwrap(),
-                matches.value_of("name").unwrap()
+                matches.value_of("name").unwrap(),
             )
             .await?
         );
@@ -220,64 +203,113 @@ async fn get_project_id(token: &str, project_name: &str) -> Result<u32> {
     Err(eyre!("project {} not found", project_name))
 }
 
-// Uses a headless browser and provided login credentials to obtain a Hetzner API user token.
-// This token is permitted to create/delete projects, and obtain API project_user tokens.
-fn get_user_token(
-    username: &str,
-    password: &str,
-    browser: Browser,
-) -> Result<String, failure::Error> {
-    let tab = browser
-        .wait_for_initial_tab()
-        .context("Couldn't open tab")?;
-    tab.navigate_to(LOGIN_URL)
-        .context("Couldn't navigate to login page")?;
-
-    tab.wait_for_element("#_username")
-        .context("Missing username field")?
-        .type_into(username)?;
-    tab.wait_for_element("#_password")
-        .context("Missing password field")?
-        .type_into(password)?;
-    tab.wait_for_element("#submit-login")
-        .context("Missing submit button")?
-        .click()?;
-
-    Wait::with_timeout(Duration::from_secs(5))
-        .until(|| {
-            if tab.get_url().starts_with(LOGIN_URL) {
-                None
+// Performs a login to Hetzner account service and obtains a user-level API token for Hetzner Cloud.
+async fn get_user_token(username: &str, password: &str) -> Result<String> {
+    let client = reqwest::Client::builder()
+        .cookie_store(true)
+        .redirect(Policy::custom(|attempt| {
+            // We don't follow too many redirects, or any redirects to the Cloud Console.
+            if attempt.previous().len() > 3 || attempt.url().to_string().starts_with(CONSOLE_URL) {
+                attempt.stop()
             } else {
-                Some(())
+                attempt.follow()
             }
-        })
-        .context("Login failed")?;
+        }))
+        .user_agent(concat!(
+            env!("CARGO_PKG_NAME"),
+            "/",
+            env!("CARGO_PKG_VERSION"),
+        ))
+        .build()?;
 
-    tab.navigate_to(CONSOLE_URL)
-        .and_then(|_| tab.wait_until_navigated())
-        .context("Couldn't visit Cloud console")?;
+    // This is the request that gives us a valid user API token for Hetzner Cloud.
+    // We hit it twice, first time to prime a PHPSESSID and get redirected to login page, then again
+    // once we've performed a login.
+    let authorize_req = client
+        .get(AUTHORIZE_URL)
+        .query(&[
+            ("response_type", "id_token token"),
+            ("client_id", "cloud_421"),
+            ("state", "spaghetti"),
+            ("nonce", "potato"),
+            ("redirect_uri", "https://console.hetzner.cloud/"),
+            ("scope", "openid"),
+        ])
+        .build()?;
 
-    // Scoop the token storage out of the "tokens" cookie saved by console.hetzner.cloud.
-    let raw_token = tab
-        .get_cookies()?
-        .iter()
-        .find(|cookie| cookie.name == "tokens" && cookie.domain == "console.hetzner.cloud")
-        .ok_or(failure::format_err!("Couldn't find tokens cookie"))?
-        .value
-        .to_owned();
+    let login_resp = client.execute(authorize_req).await?;
+    if login_resp.url().as_str() != LOGIN_URL {
+        return Err(eyre!("expected login page, got {}", login_resp.url()));
+    }
 
-    // The access token is wrapped in url-encoded JSON. So we go diggin'.
-    Ok(serde_json::from_str::<HashMap<String, serde_json::Value>>(
-        form_urlencoded::parse(("v=".to_owned() + &raw_token).as_bytes())
-            .next()
-            .ok_or_else(|| failure::format_err!("couldn't parse url-encoded token"))?
-            .1
-            .as_ref(),
-    )?
-    .values()
-    .next()
-    .and_then(|v| v.get("token"))
-    .and_then(Value::as_str)
-    .ok_or_else(|| failure::format_err!("couldn't locate token in cookie"))?
-    .to_owned())
+    // Grab a CSRF token from the login page. We'll also pickup a PHPSESSID here.
+    let login_page = Document::from(
+        login_resp
+            .text()
+            .await
+            .wrap_err("Load login page failed")?
+            .as_str(),
+    );
+    let csrf_token = login_page
+        .find(Attr("name", "_csrf_token"))
+        .next()
+        .and_then(|t| t.attr("value"))
+        .ok_or(eyre!("CSRF token not found"))?;
+
+    // Now we can perform a login.
+    let login_response = client
+        .post(LOGIN_CHECK_URL)
+        .form(&[
+            ("_username", username),
+            ("_password", password),
+            ("_csrf_token", csrf_token),
+        ])
+        .send()
+        .await?;
+
+    // If we were redirected to the login page, it probably means invalid username/password.
+    if login_response.url().as_str() == LOGIN_URL {
+        return Err(eyre!("login failed, check username/password"));
+    }
+
+    let location = login_response
+        .headers()
+        .get(header::LOCATION)
+        .and_then(|v| v.to_str().ok())
+        .ok_or(eyre!("no Location header"))?;
+    if !location.starts_with(CONSOLE_URL) {
+        return Err(eyre!(
+            "expected redirect to Cloud Console, got {}",
+            location
+        ));
+    }
+
+    let location = url::Url::parse(location)?;
+    let fragment = location
+        .fragment()
+        .ok_or(eyre!("oauth fragment missing"))?
+        .clone();
+
+    let oauth_data = url::form_urlencoded::parse(fragment.as_bytes())
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .collect::<HashMap<String, String>>();
+
+    let token_response = client
+        .post("https://api.hetzner.cloud/v1/_tokens")
+        .json(&json!({
+            "access_token": oauth_data.get("access_token").ok_or(eyre!("access_token missing"))?,
+            "id_token": oauth_data.get("id_token").ok_or(eyre!("id_token missing"))?,
+            "type": "user",
+        }))
+        .send()
+        .await?;
+
+    Ok(token_response
+        .json::<Value>()
+        .await
+        .wrap_err("failed to parse token response")?
+        .get("secret_token")
+        .and_then(|v| v.as_str())
+        .ok_or(eyre!("secret_token missing"))?
+        .to_owned())
 }

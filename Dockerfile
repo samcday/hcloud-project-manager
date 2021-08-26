@@ -7,10 +7,7 @@ FROM deps as builder
 COPY . .
 RUN cargo build --release
 
-FROM chromedp/headless-shell:94.0.4606.12
-RUN apt-get update && apt-get install -y dumb-init openssl ca-certificates && rm -rf /var/lib/apt/lists/*
+FROM gcr.io/distroless/base-debian10
 COPY --from=builder /usr/src/app/target/release/hcloud-project-manager /bin/hcloud-project-manager
 COPY actions-*.sh /
-ENTRYPOINT ["dumb-init", "--", "/bin/hcloud-project-manager"]
-ENV HEADLESS_PATH=/headless-shell/headless-shell
-ENV HEADLESS_NO_SANDBOX=1
+ENTRYPOINT ["/bin/hcloud-project-manager"]
